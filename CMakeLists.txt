@@ -1,70 +1,63 @@
-cmake_minimum_required(VERSION 3.16)
-
-project(RUSTALK VERSION 0.1 LANGUAGES CXX)
-
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
-
-set(PROJECT_SOURCES
-        main.cpp
-        mainwindow.cpp
-        mainwindow.h
-        mainwindow.ui
-)
-
-if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(RUSTALK
-        MANUAL_FINALIZATION
-        ${PROJECT_SOURCES}
-    )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET RUSTALK APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
-else()
-    if(ANDROID)
-        add_library(RUSTALK SHARED
-            ${PROJECT_SOURCES}
-        )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
-    else()
-        add_executable(RUSTALK
-            ${PROJECT_SOURCES}
-        )
-    endif()
-endif()
-
-target_link_libraries(RUSTALK PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
-
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
-if(${QT_VERSION} VERSION_LESS 6.1.0)
-  set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.RUSTALK)
-endif()
-set_target_properties(RUSTALK PROPERTIES
-    ${BUNDLE_ID_OPTION}
-    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
-    MACOSX_BUNDLE TRUE
-    WIN32_EXECUTABLE TRUE
-)
-
-include(GNUInstallDirs)
-install(TARGETS RUSTALK
-    BUNDLE DESTINATION .
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-
-if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(RUSTALK)
-endif()
+cmake_minimum_required(VERSION 3.5) 
+ 
+ project(rustalk VERSION 0.1 LANGUAGES CXX) 
+ 
+ set(CMAKE_INCLUDE_CURRENT_DIR ON) 
+ set(CMAKE_AUTOUIC ON) 
+ set(CMAKE_AUTOMOC ON) 
+ set(CMAKE_AUTORCC ON) 
+ 
+ set(CMAKE_CXX_STANDARD 11) 
+ set(CMAKE_CXX_STANDARD_REQUIRED ON) 
+ 
+ find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED) 
+ find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED) 
+ 
+ set(PROJECT_SOURCES 
+     main.cpp 
+     mainwindow.cpp 
+     mainwindow.h 
+     mainwindow.ui 
+ ) 
+ 
+ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6) 
+     qt_add_executable(rustalk 
+         MANUAL_FINALIZATION 
+         ${PROJECT_SOURCES} 
+     ) 
+ else() 
+     add_executable(rustalk 
+         ${PROJECT_SOURCES} 
+     ) 
+ endif() 
+ 
+ target_link_libraries(rustalk PRIVATE Qt${QT_VERSION_MAJOR}::Widgets) 
+ 
+ # ============================== 
+ # Rust ↔ Qt integration 
+ # ============================== 
+ 
+ set(RUST_PROJECT_DIR ${CMAKE_SOURCE_DIR}/rust/rustalk_core) 
+ set(RUST_TARGET_DIR ${RUST_PROJECT_DIR}/target/debug) 
+ 
+ add_custom_target(rustalk_core_build ALL 
+     COMMAND cargo build 
+     WORKING_DIRECTORY ${RUST_PROJECT_DIR} 
+     COMMENT "Building rustalk_core (Rust backend)" 
+ ) 
+ 
+ add_dependencies(rustalk rustalk_core_build) 
+ 
+ target_link_directories(rustalk PRIVATE ${RUST_TARGET_DIR}) 
+ 
+ target_link_libraries(rustalk PRIVATE rustalk_core) 
+ 
+ add_custom_command(TARGET rustalk POST_BUILD 
+     COMMAND ${CMAKE_COMMAND} -E copy_if_different 
+         ${RUST_TARGET_DIR}/rustalk_core.dll 
+         $<TARGET_FILE_DIR:rustalk> 
+ ) 
+ 
+ if(QT_VERSION_MAJOR EQUAL 6) 
+     qt_finalize_executable(rustalk) 
+ endif()
