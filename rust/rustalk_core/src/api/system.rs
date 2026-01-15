@@ -1,7 +1,9 @@
-pub fn shutdown() -> i32 {
-    0
+#[unsafe(no_mangle)]
+pub extern "C" fn rustalk_add(a: i32, b: i32) -> i32 {
+    a + b
 }
 
-pub fn status() -> i32 {
+#[unsafe(no_mangle)]
+pub extern "C" fn rustalk_status() -> i32 {
     1
 }
