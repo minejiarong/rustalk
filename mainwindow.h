@@ -19,6 +19,7 @@
 #include <QTcpSocket>
 
 class QListWidgetItem;
+class QModelIndex;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -50,6 +51,8 @@ private:
     void setupUi();
     void applyStyles();
     void startWsServer();
+    void copyToClipboard(const QModelIndex &index);
+    void exportToTXT();
 
     // Core UI components
     QWidget *centralWidget;

@@ -10,6 +10,9 @@
 #include <QApplication>
 #include <QMenu>
 #include <QAction>
+#include <QClipboard>
+#include <QFileDialog>
+#include <QTextStream>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -603,7 +606,41 @@ void MainWindow::onMessageContextMenu(const QPoint &pos)
     connect(deleteAction, &QAction::triggered, [this, index]() {
         messageModel->deleteMessage(index.row());
     });
+    QAction *copyAction = menu.addAction("复制到剪贴板");
+    connect(copyAction, &QAction::triggered, [this, index]() {
+        copyToClipboard(index);
+    });
+    QAction *exportAction = menu.addAction("导出到TXT");
+    connect(exportAction, &QAction::triggered, [this]() {
+        exportToTXT();
+    });
     menu.exec(messageView->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::copyToClipboard(const QModelIndex &index)
+{
+    QString content = index.data(MessageListModel::ContentRole).toString();
+    QClipboard *cb = QApplication::clipboard();
+    if (cb) cb->setText(content);
+}
+
+void MainWindow::exportToTXT()
+{
+    QString fileName = QFileDialog::getSaveFileName(this, "导出到TXT", "", "Text Files (*.txt)");
+    if (fileName.isEmpty()) return;
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    QTextStream out(&file);
+    const int rows = messageModel->rowCount();
+    for (int i = 0; i < rows; ++i) {
+        QModelIndex idx = messageModel->index(i, 0);
+        if (!idx.isValid()) continue;
+        bool isDivider = idx.data(MessageListModel::IsDividerRole).toBool();
+        if (isDivider) continue;
+        QString content = idx.data(MessageListModel::ContentRole).toString();
+        out << content << "\n";
+    }
+    file.close();
 }
 
 void MainWindow::onContactSelected(QListWidgetItem *item)
