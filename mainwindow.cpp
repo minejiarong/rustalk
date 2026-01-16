@@ -248,6 +248,16 @@ void MainWindow::setupUi()
         if (messageModel) {
             messageModel->searchMessages(searchEdit->text());
         }
+        if (messageDelegate) {
+            messageDelegate->setSearchKeyword(searchEdit->text());
+            messageView->viewport()->update();
+        }
+    });
+    connect(searchEdit, &QLineEdit::textChanged, [this](const QString& t) {
+        if (messageDelegate) {
+            messageDelegate->setSearchKeyword(t);
+            messageView->viewport()->update();
+        }
     });
     headerLayout->addWidget(searchEdit);
 

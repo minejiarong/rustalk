@@ -2,6 +2,8 @@
 #include "MessageListModel.h"
 #include <QFontMetrics>
 #include <QPalette>
+#include <QTextLayout>
+#include <QTextOption>
 
 MessageDelegate::MessageDelegate(QObject *parent) : QStyledItemDelegate(parent) {}
 
@@ -30,7 +32,41 @@ void MessageDelegate::paint(QPainter *p, const QStyleOptionViewItem &opt, const 
     p->drawRoundedRect(bubbleRect, 8, 8);
     p->setPen(fg);
     QRect inner = bubbleRect.adjusted(padding, padding, -padding, -padding);
-    p->drawText(inner, Qt::TextWordWrap, text);
+    if (!m_keyword.isEmpty()) {
+        QTextLayout layout(text, opt.font);
+        QTextOption to;
+        to.setWrapMode(QTextOption::WordWrap);
+        layout.setTextOption(to);
+        QVector<QTextLayout::FormatRange> ranges;
+        int start = 0;
+        while (true) {
+            int pos = text.indexOf(m_keyword, start, Qt::CaseInsensitive);
+            if (pos < 0) break;
+            QTextLayout::FormatRange fr;
+            fr.start = pos;
+            fr.length = m_keyword.length();
+            QTextCharFormat fmt;
+            fmt.setBackground(QColor("#FFD54F"));
+            fmt.setForeground(fg);
+            fr.format = fmt;
+            ranges.push_back(fr);
+            start = pos + fr.length;
+        }
+        layout.setAdditionalFormats(ranges);
+        layout.beginLayout();
+        qreal h = 0;
+        while (true) {
+            QTextLine line = layout.createLine();
+            if (!line.isValid()) break;
+            line.setLineWidth(inner.width());
+            line.setPosition(QPointF(0, h));
+            h += line.height();
+        }
+        layout.endLayout();
+        layout.draw(p, inner.topLeft());
+    } else {
+        p->drawText(inner, Qt::TextWordWrap, text);
+    }
     p->restore();
 }
 
@@ -41,4 +77,8 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &opt, const QModelInd
     QRect textRect = fm.boundingRect(0, 0, maxWidth, 0, Qt::TextWordWrap, text);
     int padding = 10;
     return QSize(opt.rect.width(), textRect.height() + padding * 2 + 10);
+}
+
+void MessageDelegate::setSearchKeyword(const QString& kw) {
+    m_keyword = kw.trimmed();
 }
