@@ -13,6 +13,9 @@
 #include <QClipboard>
 #include <QFileDialog>
 #include <QTextStream>
+#include <QWidgetAction>
+#include <QGridLayout>
+#include <QInputDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -294,6 +297,17 @@ void MainWindow::setupUi()
     messageInput->setObjectName("MessageInput");
     messageInput->setPlaceholderText("Type a message...");
 
+    emojiButton = new QPushButton(QString::fromUtf8("😊"), inputContainer);
+    emojiButton->setObjectName("EmojiButton");
+    emojiButton->setFixedSize(40, 40);
+    connect(emojiButton, &QPushButton::clicked, [this]() {
+        buildEmojiMenu();
+        if (emojiMenu) {
+            QPoint p = emojiButton->mapToGlobal(QPoint(0, emojiButton->height()));
+            emojiMenu->popup(p);
+        }
+    });
+
     sendButton = new QPushButton("Send", inputContainer);
     sendButton->setObjectName("SendButton");
     sendButton->setFixedSize(80, 40);
@@ -302,6 +316,7 @@ void MainWindow::setupUi()
     connect(sendButton, &QPushButton::clicked, this, &MainWindow::onSendMessage);
 
     inputLayout->addWidget(messageInput);
+    inputLayout->addWidget(emojiButton);
     inputLayout->addWidget(sendButton);
 
     chatLayout->addWidget(chatHeader);
@@ -641,6 +656,46 @@ void MainWindow::exportToTXT()
         out << content << "\n";
     }
     file.close();
+}
+
+void MainWindow::buildEmojiMenu()
+{
+    if (emojiMenu) return;
+    emojiMenu = new QMenu(emojiButton);
+    QWidget *panel = new QWidget(emojiMenu);
+    QGridLayout *grid = new QGridLayout(panel);
+    grid->setContentsMargins(8, 8, 8, 8);
+    grid->setSpacing(6);
+    QStringList emojis = {
+        "😀","😁","😂","🤣","😊","😇","🙂","🙃",
+        "😉","😌","😍","🥰","😘","😗","😙","😚",
+        "😜","😝","😛","🤗","🤔","🤭","🤫","🤐",
+        "😶","😏","😒","🙄","😞","😔","😕","🙁",
+        "☹️","😣","😖","😫","😤","😡","😠","😱",
+        "😳","🥵","🥶","🥴","🤒","🤕","🤧","🤢",
+        "🤮","🤯","😴","🥱","🤤","🫠","🫡","🫣"
+    };
+    int cols = 8;
+    for (int i = 0; i < emojis.size(); ++i) {
+        QPushButton *b = new QPushButton(emojis[i], panel);
+        b->setFixedSize(32, 32);
+        connect(b, &QPushButton::clicked, [this, i, emojis]() {
+            insertEmoji(emojis[i]);
+            if (emojiMenu) emojiMenu->hide();
+        });
+        grid->addWidget(b, i / cols, i % cols);
+    }
+    QWidgetAction *wa = new QWidgetAction(emojiMenu);
+    wa->setDefaultWidget(panel);
+    emojiMenu->addAction(wa);
+}
+
+void MainWindow::insertEmoji(const QString& emoji)
+{
+    QTextCursor cursor = messageInput->textCursor();
+    cursor.insertText(emoji);
+    messageInput->setTextCursor(cursor);
+    messageInput->setFocus();
 }
 
 void MainWindow::onContactSelected(QListWidgetItem *item)

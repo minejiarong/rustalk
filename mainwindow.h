@@ -20,6 +20,7 @@
 
 class QListWidgetItem;
 class QModelIndex;
+class QMenu;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -53,6 +54,8 @@ private:
     void startWsServer();
     void copyToClipboard(const QModelIndex &index);
     void exportToTXT();
+    void buildEmojiMenu();
+    void insertEmoji(const QString& emoji);
 
     // Core UI components
     QWidget *centralWidget;
@@ -108,6 +111,8 @@ private:
     QHBoxLayout *inputLayout;
     QTextEdit *messageInput;
     QPushButton *sendButton;
+    QPushButton *emojiButton;
+    QMenu *emojiMenu{nullptr};
 
     qint64 currentUserId{0};
     qint64 currentPeerId{0};
