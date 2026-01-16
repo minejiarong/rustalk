@@ -91,6 +91,7 @@ private:
     QWidget *chatHeader;
     QHBoxLayout *headerLayout;
     QLabel *chatTitleLabel;
+    QLabel *connectionStatusLabel;
 
     // Messages
     QListView *messageView;

@@ -6,10 +6,25 @@
 #include <QDateTime>
 #include <QScrollBar>
 #include <QListWidgetItem>
+#include <QFontDatabase>
+#include <QApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    // Load Custom Font
+    int fontId = QFontDatabase::addApplicationFont("D:/hw/qt/RUSTALK/华康宋体W12.ttf");
+    QString fontFamily = "Segoe UI"; // Fallback
+    if (fontId != -1) {
+        QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+        if (!families.isEmpty()) {
+            fontFamily = families.first();
+        }
+    }
+    // Set default font
+    qApp->setFont(QFont(fontFamily, 12));
+    this->setProperty("appFont", fontFamily);
+
     // Resize to a reasonable default
     resize(1000, 700);
 
@@ -205,6 +220,10 @@ void MainWindow::setupUi()
     chatTitleLabel = new QLabel("Select a contact", chatHeader);
     chatTitleLabel->setObjectName("ChatTitle");
     
+    connectionStatusLabel = new QLabel("未连接", chatHeader);
+    connectionStatusLabel->setObjectName("ConnectionStatus");
+    connectionStatusLabel->setContentsMargins(10, 0, 0, 0);
+
     // Add minimize/close buttons (basic implementation for frameless)
     QPushButton *minBtn = new QPushButton("-", chatHeader);
     minBtn->setObjectName("TitleBtn");
@@ -217,6 +236,7 @@ void MainWindow::setupUi()
     connect(closeBtn, &QPushButton::clicked, this, &QWidget::close);
 
     headerLayout->addWidget(chatTitleLabel);
+    headerLayout->addWidget(connectionStatusLabel);
     headerLayout->addStretch();
     headerLayout->addWidget(minBtn);
     headerLayout->addWidget(closeBtn);
@@ -275,14 +295,17 @@ void MainWindow::setupUi()
 
 void MainWindow::applyStyles()
 {
-    QString style = R"(
+    QString fontFamily = this->property("appFont").toString();
+    if (fontFamily.isEmpty()) fontFamily = "Segoe UI";
+
+    QString style = QString(R"(
         QMainWindow { 
             background-color: #1E1E1E;
         }
 
         /* Global Reset */
         * {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: '%1', sans-serif;
             font-size: 14px;
             color: #CCCCCC;
         }
@@ -374,24 +397,46 @@ void MainWindow::applyStyles()
             border-bottom: 1px solid #2B2B2B;
         }
 
-        /* Contact List */
-        #ContactList {
-            background-color: transparent;
+        /* Sidebar Tabs */
+        QTabWidget::pane {
+            border: none;
+            background: #252526;
+        }
+        QTabWidget::tab-bar {
+            alignment: left;
+        }
+        QTabBar::tab {
+            background: #252526;
+            color: #CCCCCC;
+            padding: 8px 16px;
+            border-bottom: 2px solid transparent;
+        }
+        QTabBar::tab:selected {
+            color: #FFFFFF;
+            border-bottom: 2px solid #007ACC;
+        }
+        QTabBar::tab:hover {
+            background: #2D2D30;
+        }
+
+        /* Contact & Group List */
+        QListWidget {
+            background-color: #252526;
             outline: none;
             border: none;
         }
-        #ContactList::item {
-            height: 50px;
+        QListWidget::item {
+            height: 40px;
             padding: 5px;
-            border-radius: 5px;
+            border-radius: 4px;
             margin: 2px 5px;
             color: #CCCCCC;
         }
-        #ContactList::item:selected {
+        QListWidget::item:selected {
             background-color: #37373D;
             color: #FFFFFF;
         }
-        #ContactList::item:hover {
+        QListWidget::item:hover {
             background-color: #2A2D2E;
         }
 
@@ -410,6 +455,14 @@ void MainWindow::applyStyles()
             font-size: 18px;
             font-weight: bold;
             color: #FFFFFF;
+        }
+
+        #ConnectionStatus {
+            font-size: 12px;
+            color: #888888;
+            background-color: #333333;
+            padding: 2px 8px;
+            border-radius: 10px;
         }
 
         #TitleBtn {
@@ -485,7 +538,7 @@ void MainWindow::applyStyles()
             border: none;
             background: none;
         }
-    )";
+    )").arg(fontFamily);
     this->setStyleSheet(style);
 }
 
@@ -555,27 +608,45 @@ void MainWindow::onLoginClicked()
         currentUserId = userId;
         messageModel->setCurrentUserId(currentUserId);
         rootStack->setCurrentWidget(chatRoot);
-        rustalk_connect("ws://localhost:8080");
+        
+        connectionStatusLabel->setText("正在连接...");
+        connectionStatusLabel->setStyleSheet("color: #FFA500;"); // Orange
+
+        if (rustalk_connect("ws://localhost:8080") == 0) {
+            connectionStatusLabel->setText("已连接");
+            connectionStatusLabel->setStyleSheet("color: #22C55E;"); // Green
+        } else {
+            connectionStatusLabel->setText("连接失败");
+            connectionStatusLabel->setStyleSheet("color: #E81123;"); // Red
+        }
 
         int len = 0;
         ContactFFI* contacts = rustalk_fetch_contacts(&len);
         contactList->clear();
-        if (contacts && len > 0) {
-            for (int i = 0; i < len; i++) {
-                QString name = QString::fromUtf8(contacts[i].name);
-                QListWidgetItem* item = new QListWidgetItem(name, contactList);
-                item->setData(Qt::UserRole, (qlonglong)contacts[i].id);
-            }
-            rustalk_free_contacts(contacts, len);
-        } else {
-            new QListWidgetItem("No Contacts", contactList);
+        struct TempContact { qint64 id; QString name; };
+        QList<TempContact> mockContacts = {
+            {101, "碇真嗣 (Shinji)"},
+            {102, "绫波丽 (Rei)"},
+            {103, "式波·明日香 (Asuka)"},
+            {104, "渚薰 (Kaworu)"},
+            {105, "鹿目圆 (Madoka)"},
+            {106, "晓美焰 (Homura)"},
+            {107, "巴麻美 (Mami)"},
+            {108, "美树沙耶香 (Sayaka)"},
+            {109, "佐仓杏子 (Kyoko)"}
+        };
+
+        for (const auto& c : mockContacts) {
+            QListWidgetItem* item = new QListWidgetItem(c.name, contactList);
+            item->setData(Qt::UserRole, (qlonglong)c.id);
         }
+
         groupList->clear();
         {
-            QListWidgetItem *g1 = new QListWidgetItem("开发群", groupList);
-            g1->setData(Qt::UserRole, (qlonglong)1001);
-            QListWidgetItem *g2 = new QListWidgetItem("产品群", groupList);
-            g2->setData(Qt::UserRole, (qlonglong)1002);
+            QListWidgetItem *g1 = new QListWidgetItem("NERV 指挥部", groupList);
+            g1->setData(Qt::UserRole, (qlonglong)2001);
+            QListWidgetItem *g2 = new QListWidgetItem("见泷原魔法少女", groupList);
+            g2->setData(Qt::UserRole, (qlonglong)2002);
         }
         if (contactList->count() > 0) {
             contactList->setCurrentRow(0);
