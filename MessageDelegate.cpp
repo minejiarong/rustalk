@@ -12,6 +12,34 @@ void MessageDelegate::paint(QPainter *p, const QStyleOptionViewItem &opt, const 
     QRect r = opt.rect;
     QString text = idx.data(MessageListModel::ContentRole).toString();
     bool isOwn = idx.data(MessageListModel::IsOwnRole).toBool();
+    bool isDivider = idx.data(MessageListModel::IsDividerRole).toBool();
+    if (isDivider) {
+        // Draw date divider centered
+        p->setRenderHint(QPainter::Antialiasing, true);
+        QColor bar = QColor("#4A4A4A");
+        QColor labelBg = QColor("#2E2E2E");
+        QColor labelFg = QColor("#CCCCCC");
+        int barY = r.center().y();
+        int margin = 20;
+        // left and right line
+        p->setPen(QPen(bar, 1));
+        int labelWidth = qMin(r.width() * 0.4, 220.0);
+        int labelHeight = 24;
+        int labelX = r.center().x() - labelWidth / 2;
+        // left line
+        p->drawLine(r.left() + margin, barY, labelX - 8, barY);
+        // right line
+        p->drawLine(labelX + labelWidth + 8, barY, r.right() - margin, barY);
+        // label
+        QRect labelRect(labelX, barY - labelHeight / 2, labelWidth, labelHeight);
+        p->setBrush(labelBg);
+        p->setPen(Qt::NoPen);
+        p->drawRoundedRect(labelRect, 6, 6);
+        p->setPen(labelFg);
+        p->drawText(labelRect, Qt::AlignCenter, text);
+        p->restore();
+        return;
+    }
     QFontMetrics fm(opt.font);
     int maxWidth = r.width() * 0.7;
     QRect textRect = fm.boundingRect(0, 0, maxWidth, 0, Qt::TextWordWrap, text);
@@ -72,6 +100,10 @@ void MessageDelegate::paint(QPainter *p, const QStyleOptionViewItem &opt, const 
 
 QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &opt, const QModelIndex &idx) const {
     QString text = idx.data(MessageListModel::ContentRole).toString();
+    bool isDivider = idx.data(MessageListModel::IsDividerRole).toBool();
+    if (isDivider) {
+        return QSize(opt.rect.width(), 36);
+    }
     QFontMetrics fm(opt.font);
     int maxWidth = opt.rect.width() * 0.7;
     QRect textRect = fm.boundingRect(0, 0, maxWidth, 0, Qt::TextWordWrap, text);

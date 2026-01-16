@@ -14,7 +14,8 @@ public:
         ToRole,
         TimestampRole,
         IsOwnRole,
-        SenderRole
+        SenderRole,
+        IsDividerRole
     };
 
     explicit MessageListModel(QObject *parent = nullptr);
@@ -38,6 +39,7 @@ private:
         qint64 to;
         QString content;
         qint64 timestamp;
+        bool isDivider{false};
     };
     QVector<Item> m_items;
     qint64 m_currentUserId{0};
