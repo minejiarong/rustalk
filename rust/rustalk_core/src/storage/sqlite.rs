@@ -182,3 +182,62 @@ pub fn load_contacts() -> Result<Vec<crate::domain::contact::Contact>, SqlError>
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+
+    fn db_path(name: &str) -> String {
+        let mut p = env::temp_dir();
+        p.push(format!("rustalk_test_{}.db", name));
+        p.to_string_lossy().to_string()
+    }
+
+    fn reset_db(path: &str) {
+        let _ = fs::remove_file(path);
+        init(path);
+    }
+
+    #[test]
+    fn dedup_insert() {
+        let path = db_path("dedup");
+        reset_db(&path);
+        let m = Message { from: 101, to: 102, content: "Hello".into(), timestamp: 1234567890 };
+        save_message(&m);
+        save_message(&m);
+        let rows = load_messages(101, 100);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].1.content, "Hello");
+    }
+
+    #[test]
+    fn delete_message_works() {
+        let path = db_path("delete");
+        reset_db(&path);
+        let m = Message { from: 201, to: 202, content: "ToDelete".into(), timestamp: 1111 };
+        save_message(&m);
+        let rows = load_messages(201, 10);
+        assert_eq!(rows.len(), 1);
+        let id = rows[0].0;
+        let _ = delete_message(id);
+        let rows2 = load_messages(201, 10);
+        assert_eq!(rows2.len(), 0);
+    }
+
+    #[test]
+    fn search_messages_filters_and_orders() {
+        let path = db_path("search");
+        reset_db(&path);
+        save_message(&Message { from: 301, to: 302, content: "alpha one".into(), timestamp: 10 });
+        save_message(&Message { from: 301, to: 302, content: "beta two".into(), timestamp: 20 });
+        save_message(&Message { from: 302, to: 301, content: "alpha three".into(), timestamp: 30 });
+        let rows = search_messages(301, "alpha");
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].1.timestamp >= rows[1].1.timestamp);
+        for (_, m) in rows {
+            assert!(m.content.contains("alpha"));
+        }
+    }
+}

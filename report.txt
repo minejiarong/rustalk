@@ -1,0 +1,227 @@
+一、设计任务说明
+
+1.1 课程设计任务
+本项目的整体目标是开发一个名为 RUSTALK 的跨平台多人即时通讯系统。该系统旨在模拟现代社交软件的核心体验，实现高效、稳定的实时通信功能。
+系统主要功能涵盖了完整的用户生命周期管理，包括用户的注册与登录认证；社交关系链管理，如联系人列表与分组展示；核心通讯功能，支持单聊与群聊窗口、实时消息收发、消息历史记录的本地持久化存储与查看、以及消息内容的全文搜索功能。
+在技术实现上，本项目深入应用了课程所学的核心知识点：
+1. 使用 Qt Widgets 框架设计了包含登录页、主界面、聊天窗口在内的完整 GUI，并利用 QSS 实现了现代化的暗黑主题。
+2. 采用 Qt 的 Model/View 架构（QAbstractListModel 和 QListView）高效展示聊天记录与联系人列表，实现数据与界面的解耦。
+3. 集成 SQLite 数据库，用于本地缓存用户信息、联系人数据及聊天历史，确保数据断电不丢失。
+4. 创新性地引入 Rust 语言处理后端逻辑，利用其 Tokio 异步运行时（相当于多线程处理）执行网络 I/O 和数据库操作等耗时任务，避免阻塞主界面 UI 线程。
+5. 使用 WebSocket 协议完成客户端与服务端的全双工网络通信，实现了低延迟的消息推送与心跳保活机制。
+
+1.2 开发该系统软件环境及使用的技术说明
+操作系统选用 Windows 11，为软件开发与运行提供稳定的底层环境。
+开发工具集成了 Trae IDE 进行代码编写，配合 CMake 构建 C++ 工程以及 Cargo 管理 Rust 依赖。
+Qt 版本采用 Qt 6.7，利用其先进的跨平台框架特性构建现代化的桌面用户界面。
+C++ 标准遵循 C++17 规范，利用其结构化绑定和智能指针等新特性提升代码的安全性与可读性。
+Qt Widgets 模块作为 GUI 核心，用于构建主窗口、堆栈页面、列表视图及各类交互控件。
+Qt Network 模块辅助进行网络状态检测，在服务端启动前负责检查本地端口的占用情况。
+Rust FFI 技术充当跨语言通信的桥梁，实现 C++ 前端界面与 Rust 后端逻辑的高效互操作。
+SQLite 数据库结合 Rust rusqlite 库，提供轻量级的本地数据持久化方案，无需额外部署数据库服务。
+Tokio 异步运行时库在后端接管所有耗时的网络 I/O 和数据库任务，替代传统多线程方案以避免阻塞 UI。
+编译器采用 MSVC，确保生成的应用程序在 Windows 平台上具有最佳的原生兼容性与性能。
+
+1.3 开发计划
+本项目的开发周期为 1 周（2026/01/09 至 2026/01/16），涵盖了从架构设计到最终测试发布的完整流程。
+具体任务拆分如下：
+1. 前期准备 (1月9日)：环境搭建、技术选型及系统架构设计。
+2. 后端开发 (1月10日 - 1月11日)：Rust 核心模块实现，包括 SQLite 数据库接口、WebSocket 网络层及 FFI 封装。
+3. 前端开发 (1月12日 - 1月13日)：Qt 界面开发，完成登录注册页、主窗口布局及暗黑主题样式 (QSS)。
+4. 系统集成 (1月14日)：联调 C++ 与 Rust 接口，实现消息收发、Model/View 数据绑定。
+5. 功能扩展 (1月15日)：实现消息搜索、右键删除、联系人列表等高级功能。
+6. 收尾阶段 (1月16日)：系统整体测试、Bug 修复及撰写课程设计报告。
+
+[附图：项目开发进度甘特图]
+(注：已使用 Python 生成甘特图文件 gantt_chart.png，请将该图片插入此处)
+
+二、系统架构设计
+
+2.1 系统总体架构图
+系统采用分层架构设计，自上而下分为：
+(1) 表现层 (Qt Frontend)：负责界面展示、用户交互、信号槽处理。
+(2) 接口层 (FFI Bridge)：C 语言兼容的导出接口，作为 C++ 与 Rust 的通信桥梁。
+(3) 业务逻辑层 (Rust Core)：处理消息分发 (Dispatcher)、网络 I/O、状态管理。
+(4) 数据层 (Infrastructure)：包含 SQLite 数据库存储和 WebSocket 网络连接。
+
+2.2 模块设计说明
+
+(1) 主窗口模块 (MainWindow)
+   - 职责：作为应用程序的主入口，负责管理整个界面的生命周期和布局。它协调各个子模块（如侧边栏、聊天视图、输入区）的显示与隐藏，处理全局的用户交互事件，并维护系统托盘图标及窗口特效（如毛玻璃效果）。
+   - 输入输出：接收用户的鼠标点击和键盘输入信号，输出对应的界面跳转或弹窗提示；将用户的业务请求（如发送消息）转发给后端控制器，并接收后端的状态更新信号。
+   - 所用技术：Qt Widgets, QStackedWidget, QSystemTrayIcon, Win32 Acrylic API。
+
+(2) 聊天列表模型 (MessageListModel)
+   - 职责：核心的数据模型，负责管理和维护聊天消息列表的数据结构。它连接后端数据源与前端视图，提供数据的增删改查接口（如加载历史、搜索消息、删除消息），并处理数据变化时的视图刷新通知。
+   - 输入输出：输入为从 Rust 后端或数据库获取的 Message 结构体列表；输出为符合 Qt Abstract Item Model 标准的行数据 (Role Data)，供 QListView 渲染。
+   - 所用技术：QAbstractListModel, C++ Standard Library (std::vector), Qt Signal/Slot。
+
+(3) 聊天视图代理 (MessageDelegate)
+   - 职责：负责聊天消息的具体渲染工作，实现气泡式的聊天界面。它根据消息的角色（发送者或接收者）动态计算绘制区域，绘制背景气泡、文本内容、时间戳，并处理文本的自动换行和布局对齐。
+   - 输入输出：输入为 Model 提供的索引 (QModelIndex) 和数据；输出为在 QPainter 上的图形绘制指令。
+   - 所用技术：QStyledItemDelegate, QPainter, QFontMetrics。
+
+(4) 核心业务模块 (Rust Core)
+   - 职责：承载系统的核心业务逻辑和网络通信任务。它负责建立和维护 WebSocket 长连接，处理消息的序列化与反序列化，执行用户认证（登录/注册）的加密运算，以及分发从服务器接收到的实时消息。
+   - 输入输出：输入为前端通过 FFI 传入的 C 结构体指令；输出为通过回调函数或通道 (Channel) 返回给 UI 的异步事件通知。
+   - 所用技术：Rust, Tokio (Async Runtime), Tungstenite (WebSocket), Serde (JSON), FFI (cxx/extern "C")。
+
+(5) 数据存储模块 (Storage/SQLite)
+   - 职责：负责本地数据的持久化存储，确保聊天记录和用户数据在断网或重启后依然可用。它实现了消息的去重存储、历史记录的分页查询、模糊搜索以及单条消息的删除操作。
+   - 输入输出：输入为业务对象 (User, Message)；输出为 SQL 查询结果集映射成的 Rust 结构体。
+   - 所用技术：Rusqlite, SQLite3, SQL (CRUD Operations)。
+
+2.3 数据库结构设计（SQLite）
+
+2.3.1 数据库 E-R 图（自绘）
+[用户 User] --(1:N)--> [消息 Message (作为发送者)]
+[用户 User] --(1:N)--> [消息 Message (作为接收者)]
+[联系人 Contact] --(1:1)--> [用户 User (逻辑关联)]
+
+2.3.2 表结构定义
+
+(1) 用户表 (users)
+表说明：存储所有注册用户的账户信息，用于身份认证。
+| 字段名 (Field) | 数据类型 (Type) | 约束 (Constraints) | 说明 (Description) |
+| :--- | :--- | :--- | :--- |
+| id | INTEGER | PRIMARY KEY, AUTOINCREMENT | 用户唯一标识，系统自动生成 |
+| username | TEXT | UNIQUE, NOT NULL | 用户登录名，不可重复 |
+| password_hash | TEXT | NOT NULL | SHA256 加密后的密码散列值 |
+| salt | TEXT | NOT NULL | 密码加密用的随机盐值 |
+
+(2) 消息表 (messages)
+表说明：存储点对点聊天的历史记录，支持离线查看。
+| 字段名 (Field) | 数据类型 (Type) | 约束 (Constraints) | 说明 (Description) |
+| :--- | :--- | :--- | :--- |
+| id | INTEGER | PRIMARY KEY, AUTOINCREMENT | 消息流水号，唯一标识 |
+| from_user | INTEGER | NOT NULL | 发送者 ID，关联 users 表 |
+| to_user | INTEGER | NOT NULL | 接收者 ID，关联 users 表 |
+| content | TEXT | NOT NULL | 消息正文内容 |
+| timestamp | INTEGER | NOT NULL | 发送时间戳 (Unix 毫秒级) |
+
+(3) 联系人表 (contacts)
+表说明：存储用户的联系人列表及元数据。
+| 字段名 (Field) | 数据类型 (Type) | 约束 (Constraints) | 说明 (Description) |
+| :--- | :--- | :--- | :--- |
+| id | INTEGER | PRIMARY KEY | 联系人 ID |
+| name | TEXT | NOT NULL | 联系人显示的昵称或备注 |
+
+2.4 Model/View 设计说明
+系统使用了 Qt 强大的 Model/View 架构来处理聊天消息列表：
+- Model (MessageListModel)：管理消息数据源 (QVector<Item>)，提供 rowCount, data 等接口。实现了 loadHistory (加载历史)、searchMessages (搜索)、deleteMessage (删除) 等核心功能。
+- View (QListView)：负责列表的可视化展示，通过 setModel 绑定数据模型。
+- Delegate (MessageDelegate)：继承 QStyledItemDelegate，重写 paint 函数。根据消息发送者 (IsOwnRole) 动态计算气泡位置（左/右）、背景颜色（蓝/灰）及文本换行布局，实现气泡式聊天效果。
+
+2.5 网络模块设计
+网络层完全由 Rust 实现，保证了高性能与内存安全：
+- 协议：WebSocket (RFC 6455)。
+- 库：tokio-tungstenite。
+- 机制：独立线程启动 Tokio Runtime，通过无锁队列 (mpsc channel) 接收 UI 指令（如发送消息、连接服务器）。
+- 消息格式：JSON 序列化 (Serde 库)，包含 from, to, content, timestamp 字段。
+- 心跳与重连：设计了心跳机制维持连接活跃，支持断线自动检测。
+
+2.6 多线程设计
+- 主线程 (GUI Thread)：负责 Qt 界面渲染和事件响应，通过 FFI 调用 Rust 函数（非阻塞或短时阻塞）。
+- 后台线程 (Rust Runtime Thread)：运行 Tokio 异步任务，处理 WebSocket 网络 I/O、数据库读写操作。
+- 线程通信：使用 Rust 的 std::sync::mpsc 或 tokio::sync::mpsc 通道传递事件 (CoreEvent)，避免复杂的锁竞争。
+
+2.7 UI 布局设计
+界面采用现代即时通讯软件的经典布局：
+- 窗口结构：左侧侧边栏 (Sidebar) + 右侧内容区 (Content Area)。
+- 侧边栏：顶部显示用户头像，中部为联系人/群组标签页 (QTabWidget)，底部为设置入口。
+- 聊天窗口：顶部标题栏 (包含连接状态、搜索框)，中部消息列表 (QListView)，底部输入框 (QTextEdit + Send Button)。
+- 样式：全局应用 Dark Theme (QSS)，使用深灰色背景 (#1E1E1E) 和浅色文字，强调色为蓝色 (#007ACC) 和绿色 (#22C55E，用于在线状态)。
+
+三、系统实施及结果
+
+3.1 系统界面
+(1) 登录/注册页：简洁的表单设计，支持错误提示。
+(2) 主界面：左侧展示 "鹿目圆"、"碇真嗣" 等角色联系人；右侧展示聊天记录。
+(3) 搜索功能：顶部搜索框输入关键词回车，列表即时过滤显示匹配的历史记录。
+(4) 交互细节：发送消息时滚动条自动到底部；连接成功显示绿色 "已连接" 状态；右键消息可选择 "删除"。
+
+3.2 系统测试结果
+为确保可复现，以下用例采用统一格式（输入 / 操作 / 期望输出 / 实际输出），并提供功能截图占位符。
+
+(1) 注册 / 登录功能
+输入：用户名 tester_时间戳，密码 secret；错误密码 bad
+操作：先注册；用错误密码登录；再用正确密码登录
+期望输出：注册成功并返回 userId；错误密码登录提示失败；正确密码登录进入主界面
+实际输出：后端自动化测试通过（register_and_login ok）；UI 登录状态标签正确切换
+
+(2) 消息发送与去重
+输入：向联系人发送“Hello Dedup”
+操作：点击发送，等待服务端回显或推送
+期望输出：消息列表仅显示一条；无重复气泡；滚动与刷新流畅
+实际输出：后端自动化测试通过（dedup_insert ok）；界面仅显示一条（
+
+
+(3) 右键删除消息
+输入：选中一条历史消息
+操作：右键→删除
+期望输出：该消息从列表移除；刷新后不再出现；无越界错误
+实际输出：后端自动化测试通过（delete_message_works ok）；UI 删除后列表更新
+
+(4) 搜索过滤与排序
+输入：搜索框输入“hello”
+操作：回车触发搜索
+期望输出：仅显示包含关键词的消息；时间倒序（最新在上）；清空关键词恢复最近历史
+实际输出：后端自动化测试通过（search_messages_filters_and_orders ok）；UI 过滤结果正确（见截图）
+
+
+(5) 异常处理测试：网络断开
+输入：在“已连接”状态下停止服务器或断网
+操作：断开后尝试发送消息，观察状态栏与界面响应
+期望输出：状态栏显示“连接失败”（红色）；UI 保持可操作，无卡顿；发送不阻塞主线程
+实际输出：后端自动化测试通过（connect_fail_without_server ok）；UI 状态栏变更（见截图）
+
+
+(6) 异常处理测试：数据库无数据
+输入：退出程序后删除 rustalk.db；重新启动并登录
+操作：进入聊天界面与联系人页
+期望输出：消息列表为空；联系人加载默认种子（Alice/Bob/Charlie）；无崩溃
+实际输出：界面空列表显示正常；联系人为默认数据（见截图）
+
+
+测试日志摘要：
+running 5 tests 
+test storage::sqlite::tests::dedup_insert ... ok 
+test storage::sqlite::tests::search_messages_filters_and_orders ... ok 
+test storage::sqlite::tests::delete_message_works ... ok 
+test api::user::tests::register_and_login ... ok 
+test net::ws_client::tests::connect_fail_without_server ... ok 
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.05s
+
+3.3 代码版本管理提交日志
+部分关键 Commit 记录：
+- init: project structure setup with cmake and cargo
+- feat: implement user registration and login logic
+- feat: integrate rustalk_core dll with qt frontend
+- ui: apply modern dark theme and custom fonts
+- fix: resolve message duplication issue in sqlite storage
+- feat: add message search and right-click delete context menu
+
+3.4 AI 工具使用记录
+
+3.4.1 使用的 AI 工具清单
+- Trae IDE (基于 Claude/GPT 模型构建的代码生成环境)
+- Gemini-3-Pro-Preview (核心对话与代码生成模型)
+
+3.4.2 核心提示词（Prompt）记录
+(1) "单聊/群聊窗口，消息列表 Model/View 展示；SQLite 本地缓存聊天记录与联系人信息" —— 用于生成核心聊天架构。
+(2) "在界面加一个搜索聊天记录的功能" —— 用于引导 AI 实现从后端 SQL 到前端 UI 的全链路搜索功能。
+(3) "注册和登录的界面应当要有所差别，而且对于不同的事件，应当界面有不同的反应" —— 用于完善用户认证交互体验。
+
+3.4.3 AI 代码问题分析
+(1) 消息重复显示问题
+   - 问题描述：发送消息后，界面立即上屏一次，收到服务器回包后又上屏一次，导致重复。
+   - AI 分析：指出这是 Echo Server 机制导致的，建议在数据库层做去重。
+   - 解决方案：在 Rust 的 save_message 函数中增加 SELECT count(*) 预检查，并升级时间戳精度到毫秒级，有效解决了重复插入问题。
+
+(2) FFI 字符串内存安全问题
+   - 问题描述：Rust 返回给 C++ 的 char* 字符串在释放时容易导致崩溃。
+   - AI 分析：Rust 的 CString::into_raw 移交了所有权，必须由 Rust 侧的 from_raw 重新获取所有权后释放，不能直接用 C++ 的 free。
+   - 解决方案：实现了 rustalk_free_messages 接口，专门用于在 Rust 侧安全回收 FFI 分配的内存。
+
+四、课程设计总结
+通过本次课程设计，我深入理解了跨语言混合编程的复杂性与优势。利用 Qt 强大的 GUI 能力和 Rust 卓越的内存安全与并发性能，构建了一个高效的 IM 系统。在开发过程中，重点掌握了 Model/View 架构的数据分离思想，解决了 C++ 与 Rust 之间的数据类型转换与内存管理难题（FFI）。同时，借助 AI 工具辅助编程，极大提高了代码编写效率，特别是在处理复杂的 SQL 逻辑和样板代码生成方面。最终系统功能完善，运行稳定，达到了课程设计的预期目标。

@@ -87,3 +87,40 @@ pub extern "C" fn rustalk_logout() -> i32 {
     session::clear_current_user();
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+    use std::ffi::CString;
+    use crate::storage::sqlite;
+
+    fn db_path(name: &str) -> String {
+        let mut p = env::temp_dir();
+        p.push(format!("rustalk_user_{}.db", name));
+        p.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn register_and_login() {
+        let path = db_path("reglogin");
+        let _ = fs::remove_file(&path);
+        sqlite::init(&path);
+        let uname = CString::new(format!("tester_{}", rand::thread_rng().next_u32())).unwrap();
+        let pwd = CString::new("secret").unwrap();
+        let mut uid: i64 = 0;
+        let rc = rustalk_register(uname.as_ptr(), pwd.as_ptr(), &mut uid as *mut i64);
+        assert_eq!(rc, 0);
+        assert!(uid > 0);
+
+        let wrong = CString::new("bad").unwrap();
+        let mut out: i64 = 0;
+        let rc_bad = rustalk_login(uname.as_ptr(), wrong.as_ptr(), &mut out as *mut i64);
+        assert_eq!(rc_bad, -20);
+
+        let rc_ok = rustalk_login(uname.as_ptr(), pwd.as_ptr(), &mut out as *mut i64);
+        assert_eq!(rc_ok, 0);
+        assert_eq!(out, uid);
+    }
+}

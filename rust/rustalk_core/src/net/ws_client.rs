@@ -64,3 +64,14 @@ pub fn send(msg: Message) -> i32 {
         None => -2,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn connect_fail_without_server() {
+        let rc = connect("ws://127.0.0.1:65500").await;
+        assert_eq!(rc, -1);
+    }
+}
