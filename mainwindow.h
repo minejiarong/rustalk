@@ -47,6 +47,7 @@ private slots:
     void onGotoLoginClicked();
     void onRegisterSubmitClicked();
     void onMessageContextMenu(const QPoint &pos);
+    void onContactContextMenu(const QPoint &pos);
 
 private:
     void setupUi();
@@ -56,6 +57,7 @@ private:
     void exportToTXT();
     void buildEmojiMenu();
     void insertEmoji(const QString& emoji);
+    void refreshContactListOrder();
 
     // Core UI components
     QWidget *centralWidget;

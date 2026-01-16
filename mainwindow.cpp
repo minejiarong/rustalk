@@ -196,6 +196,8 @@ void MainWindow::setupUi()
     contactList = new QListWidget(sidebarContainer);
     contactList->setObjectName("ContactList");
     contactList->setFrameShape(QFrame::NoFrame);
+    contactList->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(contactList, &QListWidget::customContextMenuRequested, this, &MainWindow::onContactContextMenu);
 
     groupList = new QListWidget(sidebarContainer);
     groupList->setObjectName("GroupList");
@@ -698,6 +700,58 @@ void MainWindow::insertEmoji(const QString& emoji)
     messageInput->setFocus();
 }
 
+void MainWindow::onContactContextMenu(const QPoint &pos)
+{
+    QListWidgetItem *item = contactList->itemAt(pos);
+    if (!item) return;
+    QMenu menu(this);
+    QAction *editRemark = menu.addAction("编辑备注");
+    QAction *togglePin = nullptr;
+    bool pinned = item->data(Qt::UserRole + 2).toBool();
+    if (pinned) {
+        togglePin = menu.addAction("取消置顶");
+    } else {
+        togglePin = menu.addAction("置顶");
+    }
+    QAction *sel = menu.exec(contactList->viewport()->mapToGlobal(pos));
+    if (!sel) return;
+    if (sel == editRemark) {
+        QString baseName = item->data(Qt::UserRole + 3).toString();
+        QString oldRemark = item->data(Qt::UserRole + 1).toString();
+        QString remark = QInputDialog::getText(this, "编辑备注", "备注：", QLineEdit::Normal, oldRemark);
+        if (!remark.isNull()) {
+            item->setData(Qt::UserRole + 1, remark);
+            if (remark.trimmed().isEmpty()) {
+                item->setText(baseName);
+            } else {
+                item->setText(baseName + " - " + remark.trimmed());
+            }
+        }
+    } else if (sel == togglePin) {
+        bool cur = item->data(Qt::UserRole + 2).toBool();
+        item->setData(Qt::UserRole + 2, !cur);
+        refreshContactListOrder();
+    }
+}
+
+void MainWindow::refreshContactListOrder()
+{
+    QList<QListWidgetItem*> pinned;
+    QList<QListWidgetItem*> normal;
+    while (contactList->count() > 0) {
+        QListWidgetItem *it = contactList->takeItem(0);
+        if (!it) break;
+        if (it->data(Qt::UserRole + 2).toBool()) pinned.push_back(it);
+        else normal.push_back(it);
+    }
+    for (auto *it : pinned) {
+        contactList->addItem(it);
+    }
+    for (auto *it : normal) {
+        contactList->addItem(it);
+    }
+}
+
 void MainWindow::onContactSelected(QListWidgetItem *item)
 {
     if (!item) return;
@@ -770,6 +824,10 @@ void MainWindow::onLoginClicked()
         for (const auto& c : mockContacts) {
             QListWidgetItem* item = new QListWidgetItem(c.name, contactList);
             item->setData(Qt::UserRole, (qlonglong)c.id);
+            item->setData(Qt::UserRole + 1, QString());
+            item->setData(Qt::UserRole + 2, false);
+            item->setData(Qt::UserRole + 3, c.name);
+            item->setText(c.name);
         }
 
         groupList->clear();
