@@ -16,8 +16,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(SYSTEM "${CMAKE_ROOT}/Modules")
 
  
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED) 
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED) 
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets Network REQUIRED) 
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets Network REQUIRED) 
  
 set(PROJECT_SOURCES 
     main.cpp 
@@ -40,7 +40,7 @@ set(PROJECT_SOURCES
      ) 
  endif() 
  
-target_link_libraries(rustalk PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(rustalk PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 
 # ============================== 
 # Rust ↔ Qt integration 
@@ -59,13 +59,28 @@ target_link_libraries(rustalk PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
  
  target_link_directories(rustalk PRIVATE ${RUST_TARGET_DIR}) 
  
- target_link_libraries(rustalk PRIVATE ${RUST_TARGET_DIR}/rustalk_core.dll.lib) 
+target_link_libraries(rustalk PRIVATE ${RUST_TARGET_DIR}/rustalk_core.dll.lib) 
  
- add_custom_command(TARGET rustalk POST_BUILD 
-     COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-         ${RUST_TARGET_DIR}/rustalk_core.dll 
-         $<TARGET_FILE_DIR:rustalk> 
+add_custom_command(TARGET rustalk POST_BUILD 
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different 
+        ${RUST_TARGET_DIR}/rustalk_core.dll 
+        $<TARGET_FILE_DIR:rustalk> 
  ) 
+ 
+ # WebSocket server build and integration
+ set(SERVER_PROJECT_DIR ${CMAKE_SOURCE_DIR}/rust/rustakl_sever)
+ add_custom_target(rustakl_sever_build ALL
+     COMMAND cargo build
+     WORKING_DIRECTORY ${SERVER_PROJECT_DIR}
+     COMMENT "Building rustakl_sever (WS server)"
+ )
+ add_dependencies(rustalk rustakl_sever_build)
+ add_custom_command(TARGET rustalk POST_BUILD
+     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+         ${SERVER_PROJECT_DIR}/target/debug/rustakl_sever.exe
+         $<TARGET_FILE_DIR:rustalk>
+ )
+ target_compile_definitions(rustalk PRIVATE RUSTALK_SERVER_DIR="${SERVER_PROJECT_DIR}")
  
  if(QT_VERSION_MAJOR EQUAL 6) 
      qt_finalize_executable(rustalk) 

@@ -14,6 +14,9 @@
 #include <QMouseEvent>
 #include <QStackedWidget>
 #include <QTabWidget>
+#include <QProcess>
+#include <QFile>
+#include <QTcpSocket>
 
 class QListWidgetItem;
 
@@ -45,6 +48,7 @@ private slots:
 private:
     void setupUi();
     void applyStyles();
+    void startWsServer();
 
     // Core UI components
     QWidget *centralWidget;
@@ -102,5 +106,6 @@ private:
     qint64 currentUserId{0};
     qint64 currentPeerId{0};
     bool currentIsGroup{false};
+    QProcess *wsServerProc{nullptr};
 };
 #endif // MAINWINDOW_H

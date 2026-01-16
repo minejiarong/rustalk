@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupUi();
 
     applyStyles();
+    startWsServer();
 }
 
 // setupWindowEffect removed as QWindowKit handles it
@@ -27,6 +28,11 @@ void MainWindow::showEvent(QShowEvent *event)
 
 MainWindow::~MainWindow()
 {
+    if (wsServerProc) {
+        wsServerProc->kill();
+        wsServerProc->waitForFinished(2000);
+        wsServerProc = nullptr;
+    }
 }
 
 void MainWindow::setupUi()
@@ -485,6 +491,28 @@ void MainWindow::applyStyles()
 
 // Frameless Window Logic
 // (Removed manual implementation as FramelessHelper handles it)
+
+void MainWindow::startWsServer()
+{
+    if (wsServerProc) return;
+    QTcpSocket sock;
+    sock.connectToHost("127.0.0.1", 8080);
+    if (sock.waitForConnected(100)) {
+        sock.abort();
+        return;
+    }
+    wsServerProc = new QProcess(this);
+    QString exe = QStringLiteral(RUSTALK_SERVER_DIR) + "/target/debug/rustakl_sever.exe";
+    if (QFile::exists(exe)) {
+        wsServerProc->setProgram(exe);
+        wsServerProc->start();
+    } else {
+        wsServerProc->setWorkingDirectory(QStringLiteral(RUSTALK_SERVER_DIR));
+        wsServerProc->setProgram("cargo");
+        wsServerProc->setArguments(QStringList() << "run");
+        wsServerProc->start();
+    }
+}
 
 void MainWindow::onContactSelected(QListWidgetItem *item)
 {
