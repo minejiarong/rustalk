@@ -31,6 +31,7 @@ int rustalk_upsert_contact(int64_t id, const char* name);
 
 // Chat API
 typedef struct {
+    int64_t id;
     int64_t from;
     int64_t to;
     char* content;
@@ -39,7 +40,9 @@ typedef struct {
 
 int rustalk_send_message(int64_t from, int64_t to, const char* content);
 MessageFFI* rustalk_fetch_history(int64_t peer, int limit, int* out_len);
+MessageFFI* rustalk_search_history(int64_t peer, const char* keyword, int* out_len);
 void rustalk_free_messages(MessageFFI* ptr, int len);
+int rustalk_delete_message(int64_t id);
 
 #ifdef __cplusplus
 }

@@ -43,6 +43,17 @@ pub fn init(path: &str) {
 
 pub fn save_message(msg: &Message) {
     let conn = DB.get().unwrap().lock().unwrap();
+    // Check if message already exists (deduplication)
+    let count: i64 = conn.query_row(
+        "SELECT count(*) FROM messages WHERE from_user=?1 AND to_user=?2 AND timestamp=?3 AND content=?4",
+        params![msg.from, msg.to, msg.timestamp, msg.content],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    if count > 0 {
+        return;
+    }
+
     conn.execute(
         "INSERT INTO messages(from_user, to_user, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
         params![msg.from, msg.to, msg.content, msg.timestamp],
@@ -50,11 +61,17 @@ pub fn save_message(msg: &Message) {
     .unwrap();
 }
 
-pub fn load_messages(peer: i64, limit: i32) -> Vec<Message> {
+pub fn delete_message(id: i64) -> Result<(), SqlError> {
+    let conn = DB.get().unwrap().lock().unwrap();
+    conn.execute("DELETE FROM messages WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+pub fn load_messages(peer: i64, limit: i32) -> Vec<(i64, Message)> {
     let conn = DB.get().unwrap().lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT from_user, to_user, content, timestamp
+            "SELECT id, from_user, to_user, content, timestamp
              FROM messages
              WHERE from_user = ?1 OR to_user = ?1
              ORDER BY timestamp DESC
@@ -63,17 +80,53 @@ pub fn load_messages(peer: i64, limit: i32) -> Vec<Message> {
         .unwrap();
     let rows = stmt
         .query_map(params![peer, limit], |row| {
-            Ok(Message {
-                from: row.get(0)?,
-                to: row.get(1)?,
-                content: row.get(2)?,
-                timestamp: row.get(3)?,
-            })
+            Ok((
+                row.get(0)?,
+                Message {
+                    from: row.get(1)?,
+                    to: row.get(2)?,
+                    content: row.get(3)?,
+                    timestamp: row.get(4)?,
+                }
+            ))
         })
         .unwrap();
     let mut out = Vec::new();
     for r in rows {
         out.push(r.unwrap());
+    }
+    out
+}
+
+pub fn search_messages(peer: i64, keyword: &str) -> Vec<(i64, Message)> {
+    let conn = DB.get().unwrap().lock().unwrap();
+    let pattern = format!("%{}%", keyword);
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, from_user, to_user, content, timestamp
+             FROM messages
+             WHERE (from_user = ?1 OR to_user = ?1) AND content LIKE ?2
+             ORDER BY timestamp DESC",
+        )
+        .unwrap();
+    let rows = stmt
+        .query_map(params![peer, pattern], |row| {
+            Ok((
+                row.get(0)?,
+                Message {
+                    from: row.get(1)?,
+                    to: row.get(2)?,
+                    content: row.get(3)?,
+                    timestamp: row.get(4)?,
+                }
+            ))
+        })
+        .unwrap();
+    let mut out = Vec::new();
+    for r in rows {
+        if let Ok(item) = r {
+            out.push(item);
+        }
     }
     out
 }
