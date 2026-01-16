@@ -3,6 +3,7 @@ use rusqlite::{params, Connection};
 use std::sync::Mutex;
 
 use crate::domain::message::Message;
+use rusqlite::Error as SqlError;
 
 static DB: OnceCell<Mutex<Connection>> = OnceCell::new();
 
@@ -15,6 +16,24 @@ pub fn init(path: &str) {
             to_user INTEGER NOT NULL,
             content TEXT NOT NULL,
             timestamp INTEGER NOT NULL
+        )",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL
+        )",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS contacts(
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL
         )",
         [],
     )
@@ -57,4 +76,56 @@ pub fn load_messages(peer: i64, limit: i32) -> Vec<Message> {
         out.push(r.unwrap());
     }
     out
+}
+
+pub fn create_user(username: &str, password_hash: &str, salt: &str) -> Result<i64, SqlError> {
+    let conn = DB.get().unwrap().lock().unwrap();
+    conn.execute(
+        "INSERT INTO users(username, password_hash, salt) VALUES (?1, ?2, ?3)",
+        params![username, password_hash, salt],
+    )?;
+    let id = conn.last_insert_rowid();
+    Ok(id as i64)
+}
+
+pub fn find_user(username: &str) -> Result<Option<(i64, String, String)>, SqlError> {
+    let conn = DB.get().unwrap().lock().unwrap();
+    let mut stmt = conn.prepare(
+        "SELECT id, password_hash, salt FROM users WHERE username = ?1 LIMIT 1",
+    )?;
+    let mut rows = stmt.query(params![username])?;
+    if let Some(row) = rows.next()? {
+        let id: i64 = row.get(0)?;
+        let hash: String = row.get(1)?;
+        let salt: String = row.get(2)?;
+        Ok(Some((id, hash, salt)))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn upsert_contact(id: i64, name: &str) -> Result<(), SqlError> {
+    let conn = DB.get().unwrap().lock().unwrap();
+    conn.execute(
+        "INSERT INTO contacts(id, name) VALUES(?1, ?2)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name",
+        params![id, name],
+    )?;
+    Ok(())
+}
+
+pub fn load_contacts() -> Result<Vec<crate::domain::contact::Contact>, SqlError> {
+    let conn = DB.get().unwrap().lock().unwrap();
+    let mut stmt = conn.prepare("SELECT id, name FROM contacts ORDER BY name ASC")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(crate::domain::contact::Contact {
+            id: row.get(0)?,
+            name: row.get(1)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
 }

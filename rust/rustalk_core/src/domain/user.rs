@@ -1,3 +1,4 @@
-pub struct User;
-pub struct Contact;
-pub struct Group;
+pub struct User {
+    pub id: i64,
+    pub username: String,
+}
