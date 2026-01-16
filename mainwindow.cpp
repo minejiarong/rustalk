@@ -8,6 +8,8 @@
 #include <QListWidgetItem>
 #include <QFontDatabase>
 #include <QApplication>
+#include <QMenu>
+#include <QAction>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -237,6 +239,18 @@ void MainWindow::setupUi()
 
     headerLayout->addWidget(chatTitleLabel);
     headerLayout->addWidget(connectionStatusLabel);
+
+    searchEdit = new QLineEdit(chatHeader);
+    searchEdit->setPlaceholderText("搜索...");
+    searchEdit->setFixedWidth(150);
+    searchEdit->setStyleSheet("QLineEdit { background-color: #333333; color: white; border: 1px solid #444; border-radius: 4px; padding: 4px; }");
+    connect(searchEdit, &QLineEdit::returnPressed, [this]() {
+        if (messageModel) {
+            messageModel->searchMessages(searchEdit->text());
+        }
+    });
+    headerLayout->addWidget(searchEdit);
+
     headerLayout->addStretch();
     headerLayout->addWidget(minBtn);
     headerLayout->addWidget(closeBtn);
@@ -247,6 +261,8 @@ void MainWindow::setupUi()
     messageView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     messageView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     messageView->setSelectionMode(QAbstractItemView::NoSelection);
+    messageView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(messageView, &QListView::customContextMenuRequested, this, &MainWindow::onMessageContextMenu);
     messageModel = new MessageListModel(messageView);
     messageDelegate = new MessageDelegate(messageView);
     messageView->setModel(messageModel);
@@ -567,6 +583,19 @@ void MainWindow::startWsServer()
     }
 }
 
+void MainWindow::onMessageContextMenu(const QPoint &pos)
+{
+    QModelIndex index = messageView->indexAt(pos);
+    if (!index.isValid()) return;
+
+    QMenu menu(this);
+    QAction *deleteAction = menu.addAction("删除");
+    connect(deleteAction, &QAction::triggered, [this, index]() {
+        messageModel->deleteMessage(index.row());
+    });
+    menu.exec(messageView->viewport()->mapToGlobal(pos));
+}
+
 void MainWindow::onContactSelected(QListWidgetItem *item)
 {
     if (!item) return;
@@ -585,7 +614,7 @@ void MainWindow::onSendMessage()
 
     if (currentPeerId == 0) return;
     rustalk_send_message(currentUserId, currentPeerId, text.toUtf8().constData());
-    qint64 ts = QDateTime::currentSecsSinceEpoch();
+    qint64 ts = QDateTime::currentMSecsSinceEpoch();
     messageModel->appendMessage(currentUserId, currentPeerId, text, ts);
     messageInput->clear();
 }

@@ -44,6 +44,7 @@ private slots:
     void onGotoRegisterClicked();
     void onGotoLoginClicked();
     void onRegisterSubmitClicked();
+    void onMessageContextMenu(const QPoint &pos);
 
 private:
     void setupUi();
@@ -92,6 +93,7 @@ private:
     QHBoxLayout *headerLayout;
     QLabel *chatTitleLabel;
     QLabel *connectionStatusLabel;
+    QLineEdit *searchEdit;
 
     // Messages
     QListView *messageView;

@@ -28,9 +28,12 @@ public:
     void clear();
     void appendMessage(qint64 from, qint64 to, const QString &content, qint64 timestamp);
     void loadHistory(int limit);
+    void searchMessages(const QString &keyword);
+    void deleteMessage(int row);
 
 private:
     struct Item {
+        qint64 id;
         qint64 from;
         qint64 to;
         QString content;

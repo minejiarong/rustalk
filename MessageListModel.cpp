@@ -59,7 +59,7 @@ void MessageListModel::clear() {
 void MessageListModel::appendMessage(qint64 from, qint64 to, const QString &content, qint64 timestamp) {
     const int pos = m_items.size();
     beginInsertRows(QModelIndex(), pos, pos);
-    m_items.push_back({from, to, content, timestamp});
+    m_items.push_back({0, from, to, content, timestamp});
     endInsertRows();
 }
 
@@ -71,7 +71,46 @@ void MessageListModel::loadHistory(int limit) {
     for (int i = 0; i < out_len; ++i) {
         const auto &m = msgs[i];
         QString text = QString::fromUtf8(m.content);
-        appendMessage(m.from, m.to, text, m.timestamp);
+        m_items.push_back({m.id, m.from, m.to, text, m.timestamp});
     }
     rustalk_free_messages(msgs, out_len);
+    if (!m_items.isEmpty()) {
+        beginInsertRows(QModelIndex(), 0, m_items.size() - 1);
+        endInsertRows();
+    }
+}
+
+void MessageListModel::searchMessages(const QString &keyword) {
+    if (keyword.isEmpty()) {
+        loadHistory(50);
+        return;
+    }
+    
+    clear();
+    int out_len = 0;
+    MessageFFI* msgs = rustalk_search_history(m_peerId, keyword.toUtf8().constData(), &out_len);
+    if (!msgs || out_len <= 0) return;
+    
+    for (int i = 0; i < out_len; ++i) {
+        const auto &m = msgs[i];
+        QString text = QString::fromUtf8(m.content);
+        m_items.push_back({m.id, m.from, m.to, text, m.timestamp});
+    }
+    rustalk_free_messages(msgs, out_len);
+    
+    if (!m_items.isEmpty()) {
+        beginInsertRows(QModelIndex(), 0, m_items.size() - 1);
+        endInsertRows();
+    }
+}
+
+void MessageListModel::deleteMessage(int row) {
+    if (row < 0 || row >= m_items.size()) return;
+    const auto &item = m_items.at(row);
+    if (item.id > 0) {
+        rustalk_delete_message(item.id);
+    }
+    beginRemoveRows(QModelIndex(), row, row);
+    m_items.removeAt(row);
+    endRemoveRows();
 }
